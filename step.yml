@@ -118,6 +118,15 @@ inputs:
         The App's *Bundle ID* on iTunes Connect.
 
         This input or app_id is required
+  - upload_platform: "testflight"
+    opts:
+      title: "Submit to TestFlight or AppStore?"
+      summary: ""
+      description: |
+        Submit the app to TestFlight for beta testing or AppStore.
+      value_options: ["testflight", "appstore"]
+      is_required: true
+      is_expand: false
   - submit_for_review: "no"
     opts:
       title: "Submit for Review?"

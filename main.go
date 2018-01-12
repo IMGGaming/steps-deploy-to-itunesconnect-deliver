@@ -19,6 +19,9 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
+const TestFlight = "testflight"
+const AppStore = "appstore"
+
 // ConfigsModel ...
 type ConfigsModel struct {
 	IpaPath string
@@ -30,6 +33,7 @@ type ConfigsModel struct {
 
 	AppID           string
 	BundleID        string
+	UploadPlatform  string
 	SubmitForReview string
 	SkipMetadata    string
 	SkipScreenshots string
@@ -53,6 +57,7 @@ func createConfigsModelFromEnvs() ConfigsModel {
 
 		AppID:           os.Getenv("app_id"),
 		BundleID:        os.Getenv("bundle_id"),
+		UploadPlatform:  os.Getenv("upload_platform"),
 		SubmitForReview: os.Getenv("submit_for_review"),
 		SkipMetadata:    os.Getenv("skip_metadata"),
 		SkipScreenshots: os.Getenv("skip_screenshots"),
@@ -78,6 +83,7 @@ func (configs ConfigsModel) print() {
 
 	log.Printf("- AppID: %s", configs.AppID)
 	log.Printf("- BundleID: %s", configs.BundleID)
+	log.Printf("- UploadPlatform: %s", configs.UploadPlatform)
 	log.Printf("- SubmitForReview: %s", configs.SubmitForReview)
 	log.Printf("- SkipMetadata: %s", configs.SkipMetadata)
 	log.Printf("- SkipScreenshots: %s", configs.SkipScreenshots)
@@ -117,6 +123,10 @@ func (configs ConfigsModel) validate() error {
 
 	if configs.AppID == "" && configs.BundleID == "" {
 		return errors.New("no AppID or BundleID parameter specified")
+	}
+
+	if err := input.ValidateWithOptions(configs.UploadPlatform, TestFlight, AppStore); err != nil {
+		return fmt.Errorf("UploadPlatform, %s", err)
 	}
 
 	if err := input.ValidateWithOptions(configs.SubmitForReview, "yes", "no"); err != nil {
@@ -359,14 +369,21 @@ This means that when the API changes
 		fmt.Sprintf("DELIVER_PASSWORD=%s", configs.Password),
 	}
 
-	if configs.AppPassword != "" {
-        envs = append(envs, fmt.Sprintf("FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD=%s", configs.AppPassword))
-    }
+	args := []string{}
 
-	args := []string{
-		"deliver",
-		"--username", configs.ItunesconUser,
+	if configs.AppPassword != "" {
+		envs = append(envs, fmt.Sprintf("FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD=%s", configs.AppPassword))
 	}
+
+	if configs.UploadPlatform == TestFlight {
+		args = append(args, "pilot")
+		args = append(args, "upload")
+	} else if configs.UploadPlatform == AppStore {
+		args = append(args, "deliver")
+	}
+
+	args = append(args, "--username")
+	args = append(args, configs.ItunesconUser)
 
 	if configs.AppID != "" {
 		args = append(args, "--app", configs.AppID)
@@ -396,21 +413,28 @@ This means that when the API changes
 		args = append(args, "--pkg", configs.PkgPath)
 	}
 
-	if configs.SkipScreenshots == "yes" {
-		args = append(args, "--skip_screenshots")
+	if configs.UploadPlatform == TestFlight {
+		args = append(args, "--skip_submission")
+		args = append(args, "--skip_waiting_for_build_processing")
 	}
 
-	if configs.SkipMetadata == "yes" {
-		args = append(args, "--skip_metadata")
+	if configs.UploadPlatform == AppStore {
+		if configs.SkipScreenshots == "yes" {
+			args = append(args, "--skip_screenshots")
+		}
+
+		if configs.SkipMetadata == "yes" {
+			args = append(args, "--skip_metadata")
+		}
+
+		args = append(args, "--force")
+
+		if configs.SubmitForReview == "yes" {
+			args = append(args, "--submit_for_review")
+		}
+
+		args = append(args, "--platform", configs.Platform)
 	}
-
-	args = append(args, "--force")
-
-	if configs.SubmitForReview == "yes" {
-		args = append(args, "--submit_for_review")
-	}
-
-	args = append(args, "--platform", configs.Platform)
 
 	args = append(args, options...)
 
